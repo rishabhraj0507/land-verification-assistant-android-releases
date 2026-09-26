@@ -1,10 +1,10 @@
 {
   "packageName": "in.landverification.preview",
-  "versionCode": 28,
-  "versionName": "0.19.0-experimental",
+  "versionCode": 30,
+  "versionName": "0.21.0-experimental",
   "signerSha256": "6295cbed7cd74256852b8a4fee17f3a2acfbcc9bf483d41fca466633fa5fde88",
-  "sha256": "409eda02f639410a49127d0f459f0d177986b9a5e86a98e51d13eb761ae0783c",
-  "sizeBytes": 7348420,
-  "apkUrl": "https://raw.githubusercontent.com/rishabhraj0507/land-verification-assistant-android-releases/android-preview-updates/Land_Assistant_Preview_0_19_0.apk",
-  "notes": "Dedicated Android update server. App updates checks the latest version and shows release notes with Download update or Later. Manual browsing, improved renderer recovery, system exit diagnostics and working OTP autofill are retained. Install over the existing Preview app to keep records."
+  "sha256": "cf8d04736e6407c9229a79fe4eec23438531485217c1d9f8dd930ac2d9b5aa49",
+  "sizeBytes": 7352586,
+  "apkUrl": "https://raw.githubusercontent.com/rishabhraj0507/land-verification-assistant-android-releases/android-preview-updates/Land_Assistant_Preview_0_21_0.apk",
+  "notes": "Keeps separate Search, Deed and Revenue tabs for each IGRSUP record. Enables browser mode after completion. Removes the long portal explanation. Sidebar unchanged. Includes the popup crash workaround and OTP autofill."
 }
