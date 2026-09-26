@@ -1,0 +1,82 @@
+name: Publish signed Android update
+on:
+  push:
+    branches: [android-preview-upload]
+    paths: ['staging/**', '.github/workflows/publish-android.yml']
+permissions:
+  contents: write
+concurrency:
+  group: android-preview-publish
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reassemble and verify signed download
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, pathlib
+          root=pathlib.Path('staging')
+          meta=json.loads((root/'update.json').read_text())
+          assert meta['packageName']=='in.landverification.preview'
+          assert meta['signerSha256']=='6295cbed7cd74256852b8a4fee17f3a2acfbcc9bf483d41fca466633fa5fde88'
+          parts=sorted(root.glob('part-*.b64'))
+          apk=base64.b64decode(''.join(p.read_text().strip() for p in parts),validate=True)
+          assert len(apk)==meta['sizeBytes']
+          assert hashlib.sha256(apk).hexdigest()==meta['sha256']
+          dest=pathlib.Path('/tmp/android-publish');dest.mkdir()
+          name=meta['apkUrl'].rsplit('/',1)[1]
+          assert name.startswith('Land_Assistant_Preview_') and name.endswith('.apk') and '/' not in name
+          (dest/name).write_bytes(apk)
+          (dest/'update.json').write_text(json.dumps(meta,indent=2)+'\n')
+          PY
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: build-tools;36.0.0
+      - name: Verify Android signature
+        run: |
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs /tmp/android-publish/*.apk | tee /tmp/android-cert.txt
+          grep -q '6295cbed7cd74256852b8a4fee17f3a2acfbcc9bf483d41fca466633fa5fde88' /tmp/android-cert.txt
+      - name: Publish update feed and signed APK together
+        run: |
+          if git ls-remote --exit-code --heads origin android-preview-updates >/dev/null; then
+            git fetch origin android-preview-updates
+            git checkout -B android-preview-updates FETCH_HEAD
+          else
+            git fetch origin main
+            git checkout -b android-preview-updates FETCH_HEAD
+          fi
+          cp /tmp/android-publish/* .
+          git config user.name 'Android update publisher'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add update.json Land_Assistant_Preview_*.apk
+          git diff --cached --quiet || git commit -m 'Publish verified signed Android preview update'
+          git push origin android-preview-updates
+
+      - name: Attach signed APK to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(python3 -c "import json;print(json.load(open('/tmp/android-publish/update.json'))['versionName'])")
+          python3 -c "import json;print(json.load(open('/tmp/android-publish/update.json'))['notes'])" > /tmp/android-release-notes.txt
+          TAG="android-v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" /tmp/android-publish/*.apk --clobber
+          else
+            gh release create "$TAG" /tmp/android-publish/*.apk --target android-preview-updates --title "Land Assistant Preview $VERSION" --notes-file /tmp/android-release-notes.txt --prerelease
+          fi
+
+      - name: Verify public update download
+        run: |
+          curl --fail --retry 6 --retry-all-errors --retry-delay 5 "https://raw.githubusercontent.com/rishabhraj0507/land-verification-assistant-android-releases/android-preview-updates/update.json?verify=$GITHUB_RUN_ID" -o /tmp/public-update.json
+          python3 - <<'PYVERIFY'
+          import json,urllib.request,hashlib
+          local=json.load(open('/tmp/android-publish/update.json'))
+          remote=json.load(open('/tmp/public-update.json'))
+          assert remote==local
+          with urllib.request.urlopen(remote['apkUrl'],timeout=60) as response: apk=response.read()
+          assert len(apk)==remote['sizeBytes']
+          assert hashlib.sha256(apk).hexdigest()==remote['sha256']
+          print('Public feed and APK verified without authentication')
+          PYVERIFY
